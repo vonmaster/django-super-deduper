@@ -15,11 +15,11 @@ logger.addHandler(logging.NullHandler())
 class MergedModelInstance(object):
 
     def __init__(
-        self,
-        primary_object: Model,
-        keep_old=True,
-        merge_field_values=True,
-        raise_validation_exception=False,
+            self,
+            primary_object: Model,
+            keep_old=True,
+            merge_field_values=True,
+            raise_validation_exception=False,
     ) -> None:
         self.primary_object = primary_object
         self.keep_old = keep_old
@@ -30,10 +30,10 @@ class MergedModelInstance(object):
 
     @classmethod
     def _create(
-        cls,
-        primary_object: Model,
-        alias_objects: List[Model],
-        **kwargs,
+            cls,
+            primary_object: Model,
+            alias_objects: List[Model],
+            **kwargs,
     ) -> 'MergedModelInstance':
         merged_model_instance = cls(primary_object, **kwargs)
 
@@ -67,32 +67,39 @@ class MergedModelInstance(object):
             reverse_o2m_accessor_name = related_field.get_accessor_name()
             o2m_accessor_name = related_field.field.name
 
-        for obj in getattr(alias_object, reverse_o2m_accessor_name).all():
-            try:
-                logger.debug(f'Attempting to set o2m field {o2m_accessor_name} on '
-                             f'{obj._meta.model.__name__}[pk={obj.pk}] to '
-                             f'{self.model_meta.model_name}[pk={self.primary_object.pk}] ...')
-                setattr(obj, o2m_accessor_name, self.primary_object)
-                obj.validate_unique()
-                obj.save()
-                logger.debug('success.')
-            except ValidationError as e:
-                logger.debug(f'failed. {e}')
-
-                if self.raise_validation_exception:
-                    raise
-
-                if related_field.field.null:
-                    logger.debug(f'Setting o2m field {o2m_accessor_name} on '
-                                 f'{obj._meta.model.__name__}[pk={obj.pk}] to `None`')
-                    setattr(obj, o2m_accessor_name, None)
+        try:
+            # print(reverse_o2m_accessor_name)
+            objs = getattr(alias_object, reverse_o2m_accessor_name).all()
+        except TypeError as e:
+            # print(e)
+            logger.debug(e)
+        else:
+            for obj in getattr(alias_object, reverse_o2m_accessor_name).all():
+                try:
+                    logger.debug(f'Attempting to set o2m field {o2m_accessor_name} on '
+                                 f'{obj._meta.model.__name__}[pk={obj.pk}] to '
+                                 f'{self.model_meta.model_name}[pk={self.primary_object.pk}] ...')
+                    setattr(obj, o2m_accessor_name, self.primary_object)
+                    obj.validate_unique()
                     obj.save()
-                else:
-                    logger.debug(f'Deleting {obj._meta.model.__name__}[pk={obj.pk}]')
-                    _pk = obj.pk
-                    obj.delete()
-                    obj.pk = _pk  # pk is cached and re-assigned to keep the audit trail in tact
-            self.modified_related_objects.append(obj)
+                    logger.debug('success.')
+                except ValidationError as e:
+                    logger.debug(f'failed. {e}')
+
+                    if self.raise_validation_exception:
+                        raise
+
+                    if related_field.field.null:
+                        logger.debug(f'Setting o2m field {o2m_accessor_name} on '
+                                     f'{obj._meta.model.__name__}[pk={obj.pk}] to `None`')
+                        setattr(obj, o2m_accessor_name, None)
+                        obj.save()
+                    else:
+                        logger.debug(f'Deleting {obj._meta.model.__name__}[pk={obj.pk}]')
+                        _pk = obj.pk
+                        obj.delete()
+                        obj.pk = _pk  # pk is cached and re-assigned to keep the audit trail in tact
+                self.modified_related_objects.append(obj)
 
     def _handle_m2m_related_field(self, related_field: Field, alias_object: Model):
         try:
